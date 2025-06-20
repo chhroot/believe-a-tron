@@ -1,4 +1,4 @@
-# Believea-Tron 9000
+# Believe-a-Tron 9000
 
 A 24/7 automated bot that monitors X (Twitter) accounts of crypto project founders, analyzes their posts with AI, and automatically executes token purchases based on intelligent decision-making.
 
