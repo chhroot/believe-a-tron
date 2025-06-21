@@ -120,6 +120,7 @@ export class UnofficialTwitterClient {
     return {
       tweetText: "Also just crossed over a million unique visitors on our site:)\nKeep the signups coming http://kled.ai",
       mediaUrls: ["https://res.cloudinary.com/dcpqmirlb/image/upload/testting_xkffxf.jpg"],
+      entryId: "tweet-1896409061001093120",
     };
   }
 }

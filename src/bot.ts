@@ -24,6 +24,7 @@ import { BotStats, BotStatus } from "./types/bot.type";
 
 export default class BelieveCryptoBot {
   private isRunning: boolean = false;
+  private isPaused: boolean = false;
   private intervalId: NodeJS.Timeout | null = null;
   private stats: BotStats = {
     tweetsProcessed: 0,
@@ -35,6 +36,7 @@ export default class BelieveCryptoBot {
   };
 
   private startTime: Date = new Date();
+  private TARGET_USD_AMOUNT: number = 1;
 
   private twitterClient: UnofficialTwitterClient;
   private telegramBot: TelegramBot;
@@ -80,6 +82,7 @@ export default class BelieveCryptoBot {
     }
 
     this.isRunning = false;
+    this.isPaused = false; // Reset pause state when stopping
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
@@ -87,8 +90,43 @@ export default class BelieveCryptoBot {
     console.log("Bot stopped");
   }
 
+  pause(): void {
+    if (!this.isRunning) {
+      console.log("Cannot pause: Bot is not running");
+      return;
+    }
+
+    if (this.isPaused) {
+      console.log("Bot is already paused");
+      return;
+    }
+
+    this.isPaused = true;
+    console.log("⏸️ Bot paused - monitoring suspended");
+  }
+
+  resume(): void {
+    if (!this.isRunning) {
+      console.log("Cannot resume: Bot is not running");
+      return;
+    }
+
+    if (!this.isPaused) {
+      console.log("Bot is not paused");
+      return;
+    }
+
+    this.isPaused = false;
+    console.log("▶️ Bot resumed - monitoring active");
+  }
+
   private async monitorTweets(): Promise<void> {
     try {
+      if (this.isPaused) {
+        console.log(`⏸️ Bot is paused, skipping monitoring cycle...`);
+        return;
+      }
+
       this.stats.lastRun = new Date();
       this.stats.uptime = Math.floor(
         (Date.now() - this.startTime.getTime()) / 1000
@@ -97,6 +135,11 @@ export default class BelieveCryptoBot {
       console.log(`🔍 Monitoring ${this.xHandles.length} handles...`);
 
       for (const handle of this.xHandles) {
+        if (this.isPaused) {
+          console.log(`⏸️ Bot paused during monitoring, stopping current cycle...`);
+          break;
+        }
+
         const tweet = await this.twitterClient.fetchTweets(handle.trim());
 
         if (tweet && !Array.isArray(tweet)) {
@@ -149,8 +192,7 @@ export default class BelieveCryptoBot {
 
       const message = `🚨 NEW POST DETECTED
       
-👤 **${handle}** posted:
-${tweet.text}
+👤 **${handle}** posted
 
 🔗 ${tweetUrl}
 
@@ -212,22 +254,33 @@ ${
       const solanaService = SolanaService.createFromEnv();
       const balance = await solanaService.getBalance();
 
-      if (balance < 10) {
-        const insufficientBalanceMessage = `❌ Insufficient balance to purchase token`;
+      console.log(`💲 Fetching current SOL price...`);
+      const solPriceUSD = await JupiterService.getSolPriceInUSD();
+      const targetUSDAmount = this.TARGET_USD_AMOUNT;
+      const solAmountForTarget = targetUSDAmount / solPriceUSD;
+      
+      console.log(`💰 Target Amount: $${targetUSDAmount}`);
+
+      const requiredBalance = solAmountForTarget * 1.1;
+      if (balance < requiredBalance) {
+        const insufficientBalanceMessage = `❌ Insufficient SOL balance`;
+        
         await sendTelegramNotification(
           this.telegramBot,
           this.chatId,
           insufficientBalanceMessage
         );
+        return;
       }
 
       const SOL_MINT = "So11111111111111111111111111111111111111112";
-      const AMOUNT_SOL = "10";
+      // Convert SOL amount to lamports (1 SOL = 1,000,000,000 lamports)
+      const AMOUNT_SOL_LAMPORTS = Math.floor(solAmountForTarget * 1e9).toString();
 
       const quoteParams: JupiterQuoteParams = {
         inputMint: SOL_MINT,
         outputMint: tokenData.address,
-        amount: AMOUNT_SOL,
+        amount: AMOUNT_SOL_LAMPORTS,
         slippageBps: 100,
         restrictIntermediateTokens: true,
       };
@@ -245,8 +298,9 @@ ${
 👤 **Handle:** @${handle}
 💰 **Token:** ${tokenData.symbol}
 🏠 **Address:** ${tokenData.address}
-💵 **Input:** ${AMOUNT_SOL} SOL
-💎 **Output:** ${result.quote.outAmount} ${tokenData.symbol}`;
+💵 **Input:** ${solAmountForTarget} SOL ($${targetUSDAmount})
+💎 **Output:** ${result.quote.outAmount} ${tokenData.symbol}
+📊 **SOL Price:** $${solPriceUSD}`;
 
         await sendTelegramNotification(
           this.telegramBot,
@@ -277,6 +331,7 @@ ${
   getStatus(): BotStatus {
     return {
       isRunning: this.isRunning,
+      isPaused: this.isPaused,
       monitoredHandles: this.xHandles,
       stats: this.stats,
     };
@@ -285,5 +340,17 @@ ${
   updateHandles(newHandles: string[]): void {
     this.xHandles = newHandles;
     console.log("Updated monitored handles:", this.xHandles);
+  }
+
+  updateTargetUSDAmount(newAmount: number): void {
+    if (newAmount <= 0) {
+      throw new Error("Target USD amount must be greater than 0");
+    }
+    this.TARGET_USD_AMOUNT = newAmount;
+    console.log(`Updated target USD amount to: $${newAmount}`);
+  }
+
+  getTargetUSDAmount(): number {
+    return this.TARGET_USD_AMOUNT;
   }
 }

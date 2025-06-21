@@ -62,6 +62,32 @@ app.post("/restart", async (req: Request, res: Response) => {
   }
 });
 
+app.post("/pause", (req: Request, res: Response) => {
+  try {
+    bot.pause();
+    res.json({ message: "Bot paused successfully" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+  }
+});
+
+app.post("/resume", (req: Request, res: Response) => {
+  try {
+    bot.resume();
+    res.json({ message: "Bot resumed successfully" });
+  } catch (error) {
+    res
+      .status(500)
+      .json({
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+  }
+});
+
 app.put("/handles", (req: Request, res: Response) => {
   try {
     const { handles } = req.body;
@@ -144,6 +170,15 @@ app.get("/", (req: Request, res: Response) => {
             box-shadow: 
                 inset 0 0 20px rgba(255, 0, 0, 0.2),
                 0 0 30px rgba(255, 0, 0, 0.4),
+                0 5px 15px rgba(0, 0, 0, 0.5);
+        }
+        
+        .paused { 
+            background: linear-gradient(145deg, rgba(255, 165, 0, 0.8), rgba(200, 120, 0, 0.8));
+            border-color: #FFA500;
+            box-shadow: 
+                inset 0 0 20px rgba(255, 165, 0, 0.2),
+                0 0 30px rgba(255, 165, 0, 0.4),
                 0 5px 15px rgba(0, 0, 0, 0.5);
         }
         
@@ -239,6 +274,36 @@ app.get("/", (req: Request, res: Response) => {
                 0 0 20px rgba(0, 100, 255, 0.3);
         }
         
+        #pause-button { 
+            background: linear-gradient(145deg, #ffaa00, #cc8800);
+            color: #fff;
+            border-color: #FFA500;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        #pause-button:hover {
+            background: linear-gradient(145deg, #ffcc33, #dd9900);
+            box-shadow: 
+                0 12px 0 rgba(255, 255, 255, 0.7),
+                0 16px 25px rgba(255, 255, 255, 0.5),
+                0 0 20px rgba(255, 165, 0, 0.3);
+        }
+        
+        #resume-button { 
+            background: linear-gradient(145deg, #32cd32, #228B22);
+            color: #fff;
+            border-color: #00ff00;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        #resume-button:hover {
+            background: linear-gradient(145deg, #3ee83e, #2eb82e);
+            box-shadow: 
+                0 12px 0 rgba(255, 255, 255, 0.7),
+                0 16px 25px rgba(255, 255, 255, 0.5),
+                0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        
         .button-container {
             text-align: center;
             margin: 30px 0;
@@ -264,6 +329,8 @@ app.get("/", (req: Request, res: Response) => {
         <button id="start-button" onclick="startBot()">Start Bot</button>
         <button id="stop-button" onclick="stopBot()">Stop Bot</button>
         <button id="restart-button" onclick="restartBot()">Restart Bot</button>
+        <button id="pause-button" onclick="pauseBot()">Pause Bot</button>
+        <button id="resume-button" onclick="resumeBot()">Resume Bot</button>
         <button id="refresh-button" onclick="refreshStatus()">Refresh Status</button>
     </div>
     
@@ -273,17 +340,64 @@ app.get("/", (req: Request, res: Response) => {
                 const response = await fetch('/status');
                 const status = await response.json();
                 const statusDiv = document.getElementById('status');
-                statusDiv.className = 'status ' + (status.isRunning ? 'running' : 'stopped');
+                
+                let statusClass = 'status ';
+                let statusText = '';
+                if (!status.isRunning) {
+                    statusClass += 'stopped';
+                    statusText = 'Stopped';
+                } else if (status.isPaused) {
+                    statusClass += 'paused';
+                    statusText = 'Paused';
+                } else {
+                    statusClass += 'running';
+                    statusText = 'Running';
+                }
+                
+                statusDiv.className = statusClass;
                 statusDiv.innerHTML = \`
-                    <h3>Bot Status: \${status.isRunning ? 'Running' : 'Stopped'}</h3>
+                    <h3>Bot Status: \${statusText}</h3>
                     <p>Monitored Handles: \${status.monitoredHandles.join(', ')}</p>
                     <p>Tweets Processed: \${status.stats.tweetsProcessed}</p>
                     <p>Tokens Analyzed: \${status.stats.tokensAnalyzed}</p>
                     <p>Purchases Made: \${status.stats.purchasesMade}</p>
                     <p>Last Run: \${status.stats.lastRun || 'Never'}</p>
                 \`;
+                
+                
+                updateButtonVisibility(status);
             } catch (error) {
                 console.error('Error fetching status:', error);
+            }
+        }
+        
+        function updateButtonVisibility(status) {
+            const startButton = document.getElementById('start-button');
+            const stopButton = document.getElementById('stop-button');
+            const restartButton = document.getElementById('restart-button');
+            const pauseButton = document.getElementById('pause-button');
+            const resumeButton = document.getElementById('resume-button');
+            
+            if (!status.isRunning) {
+                
+                startButton.style.display = 'inline-block';
+                stopButton.style.display = 'none';
+                restartButton.style.display = 'none';
+                pauseButton.style.display = 'none';
+                resumeButton.style.display = 'none';
+            } else if (status.isPaused) {
+                
+                startButton.style.display = 'none';
+                stopButton.style.display = 'inline-block';
+                restartButton.style.display = 'inline-block';
+                pauseButton.style.display = 'none';
+                resumeButton.style.display = 'inline-block';
+            } else {
+                startButton.style.display = 'none';
+                stopButton.style.display = 'inline-block';
+                restartButton.style.display = 'inline-block';
+                pauseButton.style.display = 'inline-block';
+                resumeButton.style.display = 'none';
             }
         }
         
@@ -314,6 +428,24 @@ app.get("/", (req: Request, res: Response) => {
             }
         }
         
+        async function pauseBot() {
+            try {
+                await fetch('/pause', { method: 'POST' });
+                refreshStatus();
+            } catch (error) {
+                console.error('Error pausing bot:', error);
+            }
+        }
+        
+        async function resumeBot() {
+            try {
+                await fetch('/resume', { method: 'POST' });
+                refreshStatus();
+            } catch (error) {
+                console.error('Error resuming bot:', error);
+            }
+        }
+        
         // Refresh status every 5 seconds
         setInterval(refreshStatus, 5000);
         refreshStatus(); // Initial load
@@ -323,13 +455,11 @@ app.get("/", (req: Request, res: Response) => {
   `);
 });
 
-// Start server
 app.listen(port, () => {
   console.log(`Bot management server running on port ${port}`);
   console.log(`Dashboard available at http://localhost:${port}`);
 });
 
-// Auto-start bot if specified in environment
 if (process.env.AUTO_START_BOT === "true") {
   bot.start();
 }

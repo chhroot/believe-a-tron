@@ -1,17 +1,24 @@
-import { JupiterQuoteParams, JupiterQuoteResponse, JupiterSwapParams, JupiterSwapResponse } from "../types/jupiter.type";
+import axios from "axios";
+import {
+  JupiterQuoteParams,
+  JupiterQuoteResponse,
+  JupiterSwapParams,
+  JupiterSwapResponse,
+} from "../types/jupiter.type";
 import { SolanaService } from "./solana.service";
 
-  
 export class JupiterService {
-  private static readonly BASE_URL = 'https://lite-api.jup.ag/swap/v1';
-  
-  static async getQuote(params: JupiterQuoteParams): Promise<JupiterQuoteResponse> {
+  private static readonly BASE_URL = "https://lite-api.jup.ag/swap/v1";
+
+  static async getQuote(
+    params: JupiterQuoteParams
+  ): Promise<JupiterQuoteResponse> {
     const {
       inputMint,
       outputMint,
       amount,
       slippageBps = 50,
-      restrictIntermediateTokens = true
+      restrictIntermediateTokens = true,
     } = params;
 
     const queryParams = new URLSearchParams({
@@ -19,46 +26,54 @@ export class JupiterService {
       outputMint,
       amount,
       slippageBps: slippageBps.toString(),
-      restrictIntermediateTokens: restrictIntermediateTokens.toString()
+      restrictIntermediateTokens: restrictIntermediateTokens.toString(),
     });
 
     const url = `${this.BASE_URL}/quote?${queryParams.toString()}`;
-    
+
     console.log(`🔍 Getting Jupiter quote: ${url}`);
-    
+
     try {
       const response = await fetch(url);
-      
+
       if (!response.ok) {
-        throw new Error(`Jupiter API error: ${response.status} ${response.statusText}`);
+        throw new Error(
+          `Jupiter API error: ${response.status} ${response.statusText}`
+        );
       }
-      
+
       const quoteData: JupiterQuoteResponse = await response.json();
-      
+
       console.log(`✅ Jupiter quote received:`);
       console.log(`   Input: ${quoteData.inAmount} (${quoteData.inputMint})`);
-      console.log(`   Output: ${quoteData.outAmount} (${quoteData.outputMint})`);
+      console.log(
+        `   Output: ${quoteData.outAmount} (${quoteData.outputMint})`
+      );
       console.log(`   Price Impact: ${quoteData.priceImpactPct}%`);
-      console.log(`   Route: ${quoteData.routePlan[0]?.swapInfo.label || 'Unknown'}`);
-      
+      console.log(
+        `   Route: ${quoteData.routePlan[0]?.swapInfo.label || "Unknown"}`
+      );
+
       return quoteData;
     } catch (error) {
-      console.error('❌ Failed to get Jupiter quote:', error);
+      console.error("❌ Failed to get Jupiter quote:", error);
       throw error;
     }
   }
 
-  static async buildSwapTransaction(params: JupiterSwapParams): Promise<JupiterSwapResponse> {
+  static async buildSwapTransaction(
+    params: JupiterSwapParams
+  ): Promise<JupiterSwapResponse> {
     const {
       quoteResponse,
       userPublicKey,
       dynamicComputeUnitLimit = true,
-      prioritizationFeeLamports = 'auto',
+      prioritizationFeeLamports = "auto",
       asLegacyTransaction = false,
       useSharedAccounts = true,
       feeAccount,
       trackingAccount,
-      computeUnitPriceMicroLamports
+      computeUnitPriceMicroLamports,
     } = params;
 
     const swapRequestBody = {
@@ -70,97 +85,108 @@ export class JupiterService {
       useSharedAccounts,
       ...(feeAccount && { feeAccount }),
       ...(trackingAccount && { trackingAccount }),
-      ...(computeUnitPriceMicroLamports && { computeUnitPriceMicroLamports })
+      ...(computeUnitPriceMicroLamports && { computeUnitPriceMicroLamports }),
     };
 
     const url = `${this.BASE_URL}/swap`;
-    
+
     console.log(`🔨 Building Jupiter swap transaction...`);
     console.log(`   User: ${userPublicKey}`);
-    console.log(`   Input: ${quoteResponse.inAmount} ${quoteResponse.inputMint}`);
-    console.log(`   Output: ${quoteResponse.outAmount} ${quoteResponse.outputMint}`);
-    
+    console.log(
+      `   Input: ${quoteResponse.inAmount} ${quoteResponse.inputMint}`
+    );
+    console.log(
+      `   Output: ${quoteResponse.outAmount} ${quoteResponse.outputMint}`
+    );
+
     try {
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(swapRequestBody),
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Jupiter Swap API error: ${response.status} ${response.statusText} - ${errorText}`);
+        throw new Error(
+          `Jupiter Swap API error: ${response.status} ${response.statusText} - ${errorText}`
+        );
       }
-      
+
       const swapData: JupiterSwapResponse = await response.json();
-      
+
       console.log(`✅ Jupiter swap transaction built:`);
-      console.log(`   Transaction size: ${swapData.swapTransaction.length} characters`);
+      console.log(
+        `   Transaction size: ${swapData.swapTransaction.length} characters`
+      );
       console.log(`   Compute unit limit: ${swapData.computeUnitLimit}`);
-      console.log(`   Priority fee: ${swapData.prioritizationFeeLamports} lamports`);
+      console.log(
+        `   Priority fee: ${swapData.prioritizationFeeLamports} lamports`
+      );
       console.log(`   Valid until block: ${swapData.lastValidBlockHeight}`);
-      
+
       return swapData;
     } catch (error) {
-      console.error('❌ Failed to build Jupiter swap transaction:', error);
+      console.error("❌ Failed to build Jupiter swap transaction:", error);
       throw error;
     }
   }
 
   static async getQuoteAndBuildSwap(
-    quoteParams: JupiterQuoteParams, 
+    quoteParams: JupiterQuoteParams,
     userPublicKey: string,
-    swapOptions?: Partial<Omit<JupiterSwapParams, 'quoteResponse' | 'userPublicKey'>>
+    swapOptions?: Partial<
+      Omit<JupiterSwapParams, "quoteResponse" | "userPublicKey">
+    >
   ): Promise<{ quote: JupiterQuoteResponse; swap: JupiterSwapResponse }> {
-    
     console.log(`🚀 Getting quote and building swap transaction...`);
-    
+
     const quote = await this.getQuote(quoteParams);
     const swap = await this.buildSwapTransaction({
       quoteResponse: quote,
       userPublicKey,
-      ...swapOptions
+      ...swapOptions,
     });
-    
+
     return { quote, swap };
   }
 
   static async executeSwap(
     quoteParams: JupiterQuoteParams,
     solanaService: SolanaService,
-    swapOptions?: Partial<Omit<JupiterSwapParams, 'quoteResponse' | 'userPublicKey'>>
+    swapOptions?: Partial<
+      Omit<JupiterSwapParams, "quoteResponse" | "userPublicKey">
+    >
   ): Promise<{
     quote: JupiterQuoteResponse;
     swap: JupiterSwapResponse;
     signature: string;
     confirmed: boolean;
   }> {
-    
     console.log(`🚀 Executing complete Jupiter swap...`);
-    
+
     try {
       const quote = await this.getQuote(quoteParams);
-      
+
       const swap = await this.buildSwapTransaction({
         quoteResponse: quote,
         userPublicKey: solanaService.getPublicKey(),
-        ...swapOptions
+        ...swapOptions,
       });
-      
+
       const { signature, confirmed } = await solanaService.signSendAndConfirm(
         swap.swapTransaction
       );
-      
+
       console.log(`✅ Swap execution complete!`);
       console.log(`   Signature: ${signature}`);
-      console.log(`   Confirmed: ${confirmed ? 'YES' : 'NO'}`);
-      
+      console.log(`   Confirmed: ${confirmed ? "YES" : "NO"}`);
+
       return { quote, swap, signature, confirmed };
-      
     } catch (error) {
-      console.error('❌ Failed to execute Jupiter swap:', error);
+      console.error("❌ Failed to execute Jupiter swap:", error);
       throw error;
     }
   }
@@ -184,7 +210,19 @@ export class JupiterService {
     return {
       estimatedOutput: quote.outAmount,
       priceImpact: quote.priceImpactPct,
-      route: quote.routePlan[0]?.swapInfo.label || 'Unknown'
+      route: quote.routePlan[0]?.swapInfo.label || "Unknown",
     };
+  }
+
+  static async getSolPriceInUSD(): Promise<number> {
+    try {
+      const response = await axios.get(
+        "https://lite-api.jup.ag/price/v2?ids=So11111111111111111111111111111111111111112"
+      );
+      return response.data.data.So11111111111111111111111111111111111111112.price;
+    } catch (error) {
+      console.error("❌ Error fetching SOL price:", error);
+      throw new Error("Failed to fetch SOL price");
+    }
   }
 }

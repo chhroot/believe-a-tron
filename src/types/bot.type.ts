@@ -9,6 +9,7 @@ export interface BotStats {
 
 export interface BotStatus {
   isRunning: boolean;
+  isPaused: boolean;
   monitoredHandles: string[];
   stats: BotStats;
 }
