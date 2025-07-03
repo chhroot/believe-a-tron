@@ -21,6 +21,7 @@ import { SolanaService } from "./services/solana.service";
 import { TweetData } from "./types/twitter.type";
 import { AIAnalysis } from "./types/ai.type";
 import { BotStats, BotStatus } from "./types/bot.type";
+import { createOfficialXClient, OfficialXClient, XTweetData } from "./services/x.service";
 
 export default class BelieveCryptoBot {
   private isRunning: boolean = false;
@@ -39,6 +40,7 @@ export default class BelieveCryptoBot {
   private TARGET_USD_AMOUNT: number = 1;
 
   private twitterClient: UnofficialTwitterClient;
+  private xClient: OfficialXClient;
   private telegramBot: TelegramBot;
   private chatId: string;
   private xHandles: string[];
@@ -48,6 +50,7 @@ export default class BelieveCryptoBot {
     this.twitterClient = createUnofficialTwitterClient({
       apiKey: process.env.TWITTER_API_KEY,
     });
+    this.xClient = createOfficialXClient();
 
     this.telegramBot = createTelegramBot(process.env.TELEGRAM_BOT_TOKEN || "");
     this.chatId = process.env.TELEGRAM_CHAT_ID || "";
@@ -62,9 +65,12 @@ export default class BelieveCryptoBot {
       return;
     }
 
+
     this.isRunning = true;
-    console.log("Bot started. Monitoring handles:", this.xHandles);
-    console.log("Token mappings loaded:");
+    console.log("✅ Bot started successfully!");
+    console.log("📡 Using official X API v2");
+    console.log("👀 Monitoring handles:", this.xHandles);
+    console.log("📊 Token mappings loaded:");
     this.handleTokenMappings.forEach((mapping) => {
       console.log(
         `  @${mapping.handle} -> ${mapping.tokenData.symbol} (${mapping.tokenData.address})`
@@ -82,7 +88,8 @@ export default class BelieveCryptoBot {
     }
 
     this.isRunning = false;
-    this.isPaused = false; // Reset pause state when stopping
+    this.isPaused = false; 
+    
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
@@ -132,17 +139,17 @@ export default class BelieveCryptoBot {
         (Date.now() - this.startTime.getTime()) / 1000
       );
 
-      console.log(`🔍 Monitoring ${this.xHandles.length} handles...`);
+      console.log(`🔍 Monitoring ${this.xHandles.length} handles using official X API...`);
 
       for (const handle of this.xHandles) {
         if (this.isPaused) {
           console.log(`⏸️ Bot paused during monitoring, stopping current cycle...`);
           break;
         }
+        // const tweet = await this.twitterClient.fetchTweets(handle.trim());
+        const tweet = await this.xClient.fetchTweets(handle.trim());
 
-        const tweet = await this.twitterClient.fetchTweets(handle.trim());
-
-        if (tweet && !Array.isArray(tweet)) {
+        if (tweet) {
           await this.processTweetWithAI(handle, tweet);
         }
       }
@@ -151,6 +158,7 @@ export default class BelieveCryptoBot {
       this.stats.errors++;
     }
   }
+
 
   private async processTweetWithAI(handle: string, tweet: any): Promise<any> {
     try {
@@ -174,17 +182,7 @@ export default class BelieveCryptoBot {
 
       const analysis: AIAnalysis = await analyzeTweetWithAI(tweetData);
 
-      console.log(`🎯 AI Analysis Result:`);
-      console.log(
-        `   Worth Buying: ${analysis.is_worth_buying ? "✅ YES" : "❌ NO"}`
-      );
-      console.log(
-        `   Confidence: ${Math.round(analysis.confidence_score * 100)}%`
-      );
-      console.log(`   Reason: ${analysis.reason}`);
-
-      const tweetId = tweet.entryId.replace("tweet-", "");
-      const tweetUrl = `https://x.com/${handle}/status/${tweetId}`;
+      const tweetUrl = `https://x.com/${handle}/status/${tweet.tweetId}`;
       const decision = analysis.is_worth_buying
         ? "✅ WORTH BUYING"
         : "❌ NOT WORTH BUYING";
@@ -208,7 +206,7 @@ ${
 
       if (analysis.is_worth_buying) {
         await sendTelegramNotification(this.telegramBot, this.chatId, message);
-        await this.attemptTokenPurchase(handle, tweet);
+        // await this.attemptTokenPurchase(handle, tweet);
         this.stats.tweetsProcessed++;
       } else {
         await sendTelegramNotification(this.telegramBot, this.chatId, message);

@@ -77,11 +77,23 @@ npm run dev
 
 ## API Keys Setup
 
-### Twitter API
+### Twitter API (Unofficial - RapidAPI)
 1. Go to [RapidAPI twttrapi](https://rapidapi.com/Glavier/api/twttrapi)
 2. Subscribe to a plan
 3. Copy your API key to `TWITTER_API_KEY`
 4. Set `TWITTER_METHOD=rapidapi`
+
+### X API v2 (Official Twitter API)
+1. Go to [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
+2. Create a new App or use existing one
+3. Generate Consumer Keys and Access Tokens
+4. Add to your `.env` file:
+   ```env
+   X_API_KEY=your_consumer_key_here
+   X_API_SECRET=your_consumer_secret_here
+   X_ACCESS_TOKEN=your_access_token_here
+   X_ACCESS_SECRET=your_access_token_secret_here
+   ```
 
 ### AI API
 1. Go to [Google AI Studio](https://aistudio.google.com/) for Gemini
@@ -111,6 +123,7 @@ npm run dashboard  # Start web dashboard on http://localhost:3000
 ### Testing
 ```bash
 npm run test-ai    # Test AI analysis
+npm run test-x     # Test X API v2 service
 npm run setup-telegram  # Get Telegram chat ID
 ```
 
